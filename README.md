@@ -1,2 +1,0 @@
-# devops-hw
-devops-hw
