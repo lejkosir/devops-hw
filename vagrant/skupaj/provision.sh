@@ -61,5 +61,5 @@ cd /srv/frontend
 sudo chown -R vagrant:vagrant /srv/frontend
 npm install
 npm run build
-node server.js
+#node server.js
 # npm run dev
