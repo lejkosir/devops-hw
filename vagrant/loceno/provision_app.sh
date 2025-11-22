@@ -26,4 +26,4 @@ sudo chmod 600 /etc/ssl/localcerts/nextjs.key
 
 npm run build
 sudo chown -R vagrant:vagrant /srv/frontend
-node server.js
+#node server.js
