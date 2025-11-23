@@ -187,3 +187,135 @@ Asciinema posnetki:
 
 
 ---
+# Cloud-init Deployment
+
+## Arhitektura
+
+Cloud-init postavitev vzpostavi celoten Taprav FRI sistem na eni VM (monolitno), podobno kot monolitna Vagrant postavitev:
+
+- **Next.js frontend (HTTPS, port 3000)**
+- **Apache + PHP backend (port 80)**
+- **MySQL baza (port 3307)**
+- **Redis strežnik (port 6379)**
+- **Samodejno generiran SSL certifikat**
+- **Apache reverse-proxy → HTTPS Next.js**
+
+---
+
+## Kaj naredi `cloud-config.yaml`
+
+Cloud-init datoteka vsebuje vse korake, ki bi jih sicer izvedli ročno ali preko Vagrant provisioning skript.
+
+### 1) Namestitev paketov
+Namesti:
+
+- apache2, php, libapache2-mod-php, php-mysql  
+- mysql-server, redis-server, php-redis  
+- git, curl, unzip  
+- Node.js LTS (prek NodeSource)
+
+### 2) Kloniranje repozitorija
+```
+git clone -b relative https://github.com/MatejBokal/devops-spletna /devops-spletna
+```
+
+### 3) MySQL konfiguracija
+- root geslo: **skrito123**  
+- ustvari bazo `taprav-fri`  
+- naloži SQL dump iz repozitorija  
+- spremeni MySQL port na **3307**
+
+### 4) Namestitev API
+Backend API se kopira v:
+```
+/var/www/html/taprav-fri/api
+```
+
+### 5) Namestitev frontenda
+Frontend se kopira v:
+```
+/srv/frontend
+```
+
+### 6) Generacija SSL certifikata
+Cloud-init generira:
+```
+/etc/ssl/localcerts/nextjs.key
+/etc/ssl/localcerts/nextjs.crt
+```
+
+### 7) Build Next.js aplikacije
+```
+npm install
+npm run build
+```
+
+### 8) Apache VirtualHost
+Cloud-init ustvari konfiguracijo:
+
+```apache
+<VirtualHost *:80>
+    ServerName localhost
+
+    Alias /taprav-fri/api /var/www/html/taprav-fri/api
+    <Directory /var/www/html/taprav-fri/api>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ProxyPreserveHost On
+    SSLProxyEngine On
+    ProxyPass / https://127.0.0.1:3000/
+    ProxyPassReverse / https://127.0.0.1:3000/
+
+    ErrorLog ${APACHE_LOG_DIR}/taprav-error.log
+    CustomLog ${APACHE_LOG_DIR}/taprav-access.log combined
+</VirtualHost>
+```
+
+### 9) Zagon serverjev
+Cloud-init omogoči:
+
+- apache2  
+- mysql  
+- redis-server  
+
+### 10) Zagon Next.js v ozadju
+```
+nohup npm --prefix /srv/frontend run start > /var/log/nextjs.log 2>&1 &
+```
+
+---
+
+## Zagon VM preko cloud-init
+
+VM zaženete z:
+
+```
+multipass launch --name taprav-fri   --cpus 2 --memory 4G --disk 10G   --cloud-init cloud-init.yaml 24.04
+```
+
+SSH dostop:
+```
+multipass shell taprav-fri
+```
+
+---
+
+## Dostop do aplikacije
+
+| Komponenta | Lokacija |
+|-----------|----------|
+| Frontend | https://localhost:3000 |
+| Backend API | http://localhost/taprav-fri/api/ |
+| MySQL | 127.0.0.1:3307 |
+| Redis | 127.0.0.1:6379 |
+
+---
+
+## cloud-init analyze
+
+```
+cloud-init analyze show
+```
+
