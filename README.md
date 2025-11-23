@@ -312,10 +312,4 @@ multipass shell taprav-fri
 | Redis | 127.0.0.1:6379 |
 
 ---
-
-## cloud-init analyze
-
-```
-cloud-init analyze show
-```
-
+<img width="907" height="347" alt="Posnetek zaslona 2025-11-23 231418" src="https://github.com/user-attachments/assets/93f7ef75-fdd7-4bc6-8d80-513d1be5edac" />
