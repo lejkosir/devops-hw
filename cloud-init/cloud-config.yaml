@@ -1,0 +1,90 @@
+#cloud-config
+package_update: true
+packages:
+  - apache2
+  - php
+  - libapache2-mod-php
+  - php-mysql
+  - mysql-server
+  - git
+  - curl
+  - unzip
+  - redis-server
+  - php-redis
+
+runcmd:
+  - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+  - apt-get install -y nodejs
+
+  - |
+      while [ ! -x "$(command -v git)" ]; do sleep 1; done
+      if [ ! -d /devops-spletna ]; then
+        git clone -b relative https://github.com/MatejBokal/devops-spletna /devops-spletna
+      fi
+
+  - |
+      mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'skrito123'; FLUSH PRIVILEGES;"
+      systemctl enable mysql
+      systemctl restart mysql
+      mysql -uroot -pskrito123 -e "CREATE DATABASE IF NOT EXISTS \`taprav-fri\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
+      mysql -uroot -pskrito123 taprav-fri < /devops-spletna/taprav-fri.sql
+      echo "port=3307" >> /etc/mysql/mysql.conf.d/mysqld.cnf
+      systemctl restart mysql
+
+  - mkdir -p /var/www/html/taprav-fri/api
+  - cp -r /devops-spletna/code/taprav-fri/api/* /var/www/html/taprav-fri/api/
+  - chown -R www-data:www-data /var/www/html/taprav-fri
+
+  - mkdir -p /srv/frontend
+  - cp -r /devops-spletna/code/taprav-fri/frontend/* /srv/frontend/
+  - chown -R ubuntu:ubuntu /srv/frontend
+
+  - |
+      mkdir -p /etc/ssl/localcerts
+      if [ ! -f /etc/ssl/localcerts/nextjs.key ]; then
+        openssl req -x509 -nodes -days 365 \
+          -newkey rsa:2048 \
+          -keyout /etc/ssl/localcerts/nextjs.key \
+          -out /etc/ssl/localcerts/nextjs.crt \
+          -subj "/CN=localhost"
+        chmod 600 /etc/ssl/localcerts/nextjs.key
+        chown ubuntu:ubuntu /etc/ssl/localcerts/nextjs.key
+      fi
+
+  - |
+      cd /srv/frontend
+      npm install
+      npm run build
+
+  - |
+      printf "%s\n" "<VirtualHost *:80>
+      ServerName localhost
+
+      Alias /taprav-fri/api /var/www/html/taprav-fri/api
+      <Directory /var/www/html/taprav-fri/api>
+          AllowOverride All
+          Require all granted
+      </Directory>
+
+      ProxyPreserveHost On
+      SSLProxyEngine On
+      ProxyPass / https://127.0.0.1:3000/
+      ProxyPassReverse / https://127.0.0.1:3000/
+
+      ErrorLog \${APACHE_LOG_DIR}/taprav-error.log
+      CustomLog \${APACHE_LOG_DIR}/taprav-access.log combined
+      </VirtualHost>" \
+      > /etc/apache2/sites-available/taprav-fri.conf
+
+  - a2enmod proxy
+  - a2enmod proxy_http
+  - a2enmod ssl
+  - a2enmod rewrite
+  - a2ensite taprav-fri.conf
+  - a2dissite 000-default.conf
+  - systemctl reload apache2
+
+  - systemctl enable redis-server
+  - systemctl start redis-server
+
+  - nohup npm --prefix /srv/frontend run start > /var/log/nextjs.log 2>&1 &
