@@ -292,7 +292,7 @@ nohup npm --prefix /srv/frontend run start > /var/log/nextjs.log 2>&1 &
 VM zaženete z:
 
 ```
-multipass launch --name taprav-fri   --cpus 2 --memory 4G --disk 10G   --cloud-init cloud-init.yaml 24.04
+multipass launch --name taprav-fri   --cpus 2 --memory 4G --disk 10G   --cloud-init cloud-config.yaml 24.04
 ```
 
 SSH dostop:
